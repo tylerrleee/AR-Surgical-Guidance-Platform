@@ -6,6 +6,7 @@ import time
 import threading
 import queue
 import sys
+import io, wave
 
 # ====== CONFIG ======
 SERVER_IP = "172.20.10.2"
@@ -112,28 +113,72 @@ def mjpeg_reader_proc():
                 # ignore bad frame and continue
                 pass
 
+def pcm_to_wav(pcm_bytes: bytes, sample_rate=48000, channels=1, sampwidth_bytes=2) -> bytes:
+    """Wrap raw PCM bytes in a minimal WAV header."""
+    with io.BytesIO() as bio:
+        with wave.open(bio, 'wb') as wf:
+            wf.setnchannels(channels)
+            wf.setsampwidth(sampwidth_bytes)
+            wf.setframerate(sample_rate)
+            wf.writeframes(pcm_bytes)
+        return bio.getvalue()
+
 def audio_worker():
     """
-    Record short WAV chunks continuously and keep only the latest.
+    Stream mono 16-bit PCM from arecord and emit ~100ms WAV chunks continuously.
     """
     global latest_audio_b64, latest_audio_ts
-    cmd = [
-        "arecord",
-        "-D", "plughw:3,0",
-        "-f", "S16_LE",
-        "-r", "48000",
-        "-c", "1",
-        "-d", AUDIO_DUR_SEC,
-        "-t", "wav"
-    ]
+
+    SR = 48000
+    CH = 1
+    BYTES_PER_SAMPLE = 2  # S16_LE
+    CHUNK_MS = 100
+    CHUNK_BYTES = int(SR * CH * BYTES_PER_SAMPLE * CHUNK_MS / 1000)
+
+    def start_proc():
+        return subprocess.Popen(
+            ["arecord",
+             "-D", "plughw:3,0",
+             "-f", "S16_LE",
+             "-r", str(SR),
+             "-c", str(CH),
+             "-t", "raw"],                 # raw PCM stream
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            bufsize=CHUNK_BYTES * 4
+        )
+
+    proc = start_proc()
+    buf = bytearray()
+
     while True:
-        res = subprocess.run(cmd, capture_output=True)
-        if res.stdout:
-            try:
-                latest_audio_b64 = base64.b64encode(res.stdout).decode()
-                latest_audio_ts = time.time()
-            except Exception:
-                pass
+        try:
+            chunk = proc.stdout.read(CHUNK_BYTES)
+            if not chunk:
+                # device hiccup; restart
+                try: proc.kill()
+                except Exception: pass
+                proc = start_proc()
+                continue
+
+            buf.extend(chunk)
+
+            # emit fixed-size chunks
+            while len(buf) >= CHUNK_BYTES:
+                pcm = bytes(buf[:CHUNK_BYTES])
+                del buf[:CHUNK_BYTES]
+
+                wav_bytes = pcm_to_wav(pcm, sample_rate=SR, channels=CH, sampwidth_bytes=BYTES_PER_SAMPLE)
+                try:
+                    latest_audio_b64 = base64.b64encode(wav_bytes).decode()
+                    latest_audio_ts = time.time()
+                except Exception:
+                    pass
+        except Exception:
+            # restart on any read error
+            try: proc.kill()
+            except Exception: pass
+            proc = start_proc()
 
 def sender():
     """
