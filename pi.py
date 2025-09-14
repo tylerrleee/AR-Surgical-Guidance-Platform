@@ -9,7 +9,7 @@ import sys
 import io, wave
 
 # ====== CONFIG ======
-SERVER_IP = "172.20.10.2"
+SERVER_IP = "192.168.2.1"
 WIDTH, HEIGHT = "640", "480"          # try 640x480 first; drop to 480x360 if needed
 FPS = "30"                             # request rate; camera/CPU will cap it
 AUDIO_DUR_SEC = "0.10"                 # shorter audio chunks to keep latency low
