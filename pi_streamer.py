@@ -1,0 +1,344 @@
+#!/usr/bin/env python3
+"""
+Raspberry Pi video/audio streamer for ArduCam (robust version)
+- Tries V4L2 (USB/UVC) then GStreamer v4l2src, then libcamera (CSI/MIPI).
+- Auto-detects an audio input; disables audio if none.
+"""
+
+import cv2
+import numpy as np
+import base64
+import asyncio
+import websockets
+import json
+import pyaudio
+import threading
+import queue
+import time
+import os
+import glob
+
+# ================== CONFIG ==================
+SERVER_IP = "10.189.65.41"   # <-- set to your Mac's reachable IP (you used this already)
+SERVER_PORT = 8765
+
+FRAME_WIDTH  = 640
+FRAME_HEIGHT = 480
+FPS          = 30
+JPEG_QUALITY = 80
+
+# Camera backends to try, in order
+TRY_V4L2_DIRECT     = True   # cv2.VideoCapture(index, cv2.CAP_V4L2) with MJPG
+TRY_GST_V4L2SRC     = True   # GStreamer pipeline using v4l2src (for UVC or v4l2-mapped cams)
+TRY_GST_LIBCAMERA   = True   # GStreamer pipeline using libcamerasrc (for CSI/MIPI cams)
+
+# Audio settings
+ENABLE_AUDIO        = True   # set False to silent-run
+AUDIO_FORMAT        = pyaudio.paInt16
+AUDIO_CHANNELS      = 1
+AUDIO_RATE          = 16000   # lower = lighter CPU/bw; keep it mono
+AUDIO_CHUNK         = 1024
+AUDIO_DEVICE_INDEX  = None    # None => auto-pick first input device
+# ============================================
+
+
+def list_video_nodes():
+    return sorted(glob.glob("/dev/video*"))
+
+def pick_first_video_index():
+    # Map /dev/videoN → N (returns 0 if /dev/video0 exists)
+    nodes = list_video_nodes()
+    if not nodes:
+        return None
+    # Prefer /dev/video0 if present
+    for n in nodes:
+        if n.endswith("video0"):
+            return 0
+    # Else pick smallest number we find
+    try:
+        return int(nodes[0].rsplit("video", 1)[1])
+    except Exception:
+        return 0
+
+def open_camera_robust():
+    """
+    Try several ways to open a camera and set sane parameters.
+    Returns an opened cv2.VideoCapture or None.
+    """
+    # 1) Direct V4L2 on an index (best for UVC USB cams)
+    if TRY_V4L2_DIRECT:
+        idx = pick_first_video_index()
+        if idx is not None:
+            cap = cv2.VideoCapture(idx, cv2.CAP_V4L2)
+            # Use MJPG to reduce bandwidth and avoid memory issues
+            cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, FRAME_WIDTH)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT)
+            cap.set(cv2.CAP_PROP_FPS, FPS)
+            if cap.isOpened():
+                print(f"[video] V4L2 direct opened /dev/video{idx} (MJPG)")
+                return cap
+            else:
+                cap.release()
+
+    # 2) GStreamer via v4l2src (UVC or v4l2-mapped cams)
+    if TRY_GST_V4L2SRC:
+        # Prefer /dev/video0
+        dev = "/dev/video0" if os.path.exists("/dev/video0") else (list_video_nodes()[0] if list_video_nodes() else None)
+        if dev:
+            # Ask for MJPEG from camera and decode on CPU
+            pipeline = (
+                f"v4l2src device={dev} ! "
+                f"image/jpeg,framerate={FPS}/1,width={FRAME_WIDTH},height={FRAME_HEIGHT} ! "
+                f"jpegdec ! videoconvert ! appsink"
+            )
+            cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
+            if cap.isOpened():
+                print(f"[video] GStreamer v4l2src opened {dev} (MJPEG)")
+                return cap
+
+    # 3) GStreamer via libcamerasrc (CSI/MIPI cams using libcamera)
+    if TRY_GST_LIBCAMERA:
+        pipeline = (
+            f"libcamerasrc ! "
+            f"video/x-raw,width={FRAME_WIDTH},height={FRAME_HEIGHT},framerate={FPS}/1 ! "
+            f"videoconvert ! appsink"
+        )
+        cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
+        if cap.isOpened():
+            print("[video] GStreamer libcamerasrc opened (CSI/MIPI)")
+            return cap
+
+    print("[video] ERROR: Could not open any camera. Check /dev/video*, libcamera, or cabling.")
+    return None
+
+def pick_audio_input_index(p):
+    """
+    Return a valid input device index or None if none present.
+    """
+    try:
+        device_count = p.get_device_count()
+        for i in range(device_count):
+            info = p.get_device_info_by_index(i)
+            if int(info.get('maxInputChannels', 0)) > 0:
+                return i
+    except Exception:
+        pass
+    return None
+
+def pick_audio_rate(p, dev_index, candidates=(16000, 48000, 44100, 32000, 22050, 8000)):
+    """Return a supported sample rate for the selected device, or None."""
+    order = []
+    try:
+        di = p.get_device_info_by_index(dev_index)
+        default_sr = int(round(float(di.get('defaultSampleRate', 0))))
+        if default_sr:
+            order.append(default_sr)
+    except Exception:
+        pass
+    # add fallbacks, keeping unique order
+    order += [r for r in candidates if r not in order]
+
+    for r in order:
+        try:
+            test = p.open(format=AUDIO_FORMAT,
+                          channels=AUDIO_CHANNELS,
+                          rate=r,
+                          input=True,
+                          frames_per_buffer=AUDIO_CHUNK,
+                          input_device_index=dev_index)
+            test.close()
+            return r
+        except Exception:
+            continue
+    return None
+
+class VideoAudioStreamer:
+    def __init__(self):
+        # ---- Camera ----
+        self.cap = open_camera_robust()
+        if self.cap is None:
+            print("[video] Continuing without video (no camera).")
+        else:
+            # Try to ensure JPEG quality on encode
+            self.encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY]
+
+        # ---- Audio ----
+        self.audio_stream = None
+        self.audio = None
+        self.audio_rate = None
+
+        if ENABLE_AUDIO:
+            try:
+                self.audio = pyaudio.PyAudio()
+                dev_index = AUDIO_DEVICE_INDEX
+                if dev_index is None:
+                    dev_index = pick_audio_input_index(self.audio)
+                if dev_index is None:
+                    print("[audio] No input device found; disabling audio.")
+                else:
+                    di = self.audio.get_device_info_by_index(dev_index)
+                    print(f"[audio] Using device {dev_index}: {di.get('name')}")
+                    chosen_rate = pick_audio_rate(self.audio, dev_index)
+                    if not chosen_rate:
+                        print("[audio] No supported sample rate; disabling audio.")
+                    else:
+                        print(f"[audio] Chosen sample rate: {chosen_rate} Hz")
+                        self.audio_rate = chosen_rate
+                        self.audio_stream = self.audio.open(
+                            format=AUDIO_FORMAT,
+                            channels=AUDIO_CHANNELS,
+                            rate=chosen_rate,
+                            input=True,
+                            frames_per_buffer=AUDIO_CHUNK,
+                            input_device_index=dev_index
+                        )
+            except Exception as e:
+                print(f"[audio] Disabled (init error): {e}")
+                self.audio_stream = None
+        else:
+            print("[audio] Disabled by config.")
+
+
+        # Queues for thread communication
+        self.video_queue = queue.Queue(maxsize=10)
+        self.audio_queue = queue.Queue(maxsize=10)
+
+        self.running = True
+
+    def capture_video(self):
+        """Capture video frames in separate thread"""
+        if self.cap is None:
+            return
+        while self.running:
+            ret, frame = self.cap.read()
+            if not ret:
+                # Give camera a moment, then retry
+                time.sleep(0.02)
+                continue
+            # Encode to JPEG
+            ok, buffer = cv2.imencode('.jpg', frame, getattr(self, "encode_params", []))
+            if not ok:
+                continue
+            jpg_as_text = base64.b64encode(buffer).decode('utf-8')
+            try:
+                self.video_queue.put_nowait(jpg_as_text)
+            except queue.Full:
+                try:
+                    _ = self.video_queue.get_nowait()
+                    self.video_queue.put_nowait(jpg_as_text)
+                except Exception:
+                    pass
+
+    def capture_audio(self):
+        """Capture audio in separate thread"""
+        if self.audio_stream is None:
+            return
+        while self.running:
+            try:
+                audio_data = self.audio_stream.read(AUDIO_CHUNK, exception_on_overflow=False)
+                audio_b64 = base64.b64encode(audio_data).decode('utf-8')
+                try:
+                    self.audio_queue.put_nowait(audio_b64)
+                except queue.Full:
+                    try:
+                        _ = self.audio_queue.get_nowait()
+                        self.audio_queue.put_nowait(audio_b64)
+                    except Exception:
+                        pass
+            except Exception:
+                # keep going; drop this chunk
+                time.sleep(0.005)
+
+    async def stream_data(self):
+        """Stream video and audio to server with resilient keepalive and pacing."""
+        uri = f"ws://{SERVER_IP}:{SERVER_PORT}"
+        print(f"[net] Target: {uri}")
+        while self.running:
+            try:
+                async with websockets.connect(
+                    uri,
+                    max_size=4 * 1024 * 1024,  # allow larger frames
+                    ping_interval=20,          # send ping every 20s
+                    ping_timeout=10            # wait up to 10s for pong
+                ) as websocket:
+                    print(f"[net] Connected to server at {uri}")
+                    while self.running:
+                        video_frame = None
+                        audio_data = None
+
+                        try:
+                            video_frame = self.video_queue.get_nowait()
+                        except queue.Empty:
+                            pass
+
+                        try:
+                            audio_data = self.audio_queue.get_nowait()
+                        except queue.Empty:
+                            pass
+
+                        if video_frame is not None or audio_data is not None:
+                            message = {
+                                "type": "stream",
+                                "video": video_frame,
+                                "audio": audio_data,
+                                "audio_rate": getattr(self, "audio_rate", 16000),
+                                "timestamp": time.time(),
+                            }
+                            try:
+                                await websocket.send(json.dumps(message))
+                            except Exception as e:
+                                print(f"[net] Send error: {e}")
+                                break
+
+                        # ~30 FPS pacing while still allowing audio-only periods
+                        await asyncio.sleep(0.03)
+
+            except Exception as e:
+                print(f"[net] Connection error: {e}")
+                print("[net] Reconnecting in 5 seconds...")
+                await asyncio.sleep(5)
+
+    def start(self):
+        """Start streaming"""
+        # Start capture threads
+        vt = threading.Thread(target=self.capture_video, daemon=True)
+        at = threading.Thread(target=self.capture_audio, daemon=True)
+        vt.start(); at.start()
+
+        # Run async streaming
+        try:
+            asyncio.run(self.stream_data())
+        except KeyboardInterrupt:
+            print("\nStopping streamer...")
+        finally:
+            self.running = False
+            vt.join(timeout=1.0)
+            at.join(timeout=1.0)
+            # Cleanup
+            if self.cap is not None:
+                self.cap.release()
+            if self.audio_stream is not None:
+                try:
+                    self.audio_stream.stop_stream()
+                    self.audio_stream.close()
+                except Exception:
+                    pass
+            if self.audio is not None:
+                try:
+                    self.audio.terminate()
+                except Exception:
+                    pass
+            cv2.destroyAllWindows()
+
+
+if __name__ == "__main__":
+    print("Starting Telemedicine Streamer...")
+    print(f"SERVER_IP = {SERVER_IP}, SERVER_PORT = {SERVER_PORT}")
+    print(f"Video: {FRAME_WIDTH}x{FRAME_HEIGHT} @{FPS}fps, JPEG Q={JPEG_QUALITY}")
+    if ENABLE_AUDIO:
+        print(f"Audio: {AUDIO_RATE} Hz mono, chunk={AUDIO_CHUNK}")
+    else:
+        print("Audio: disabled")
+    streamer = VideoAudioStreamer()
+    streamer.start()
