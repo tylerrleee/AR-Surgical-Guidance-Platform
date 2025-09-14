@@ -13,7 +13,7 @@ SERVER_IP = "172.20.10.2"
 WIDTH, HEIGHT = "640", "480"          # try 640x480 first; drop to 480x360 if needed
 FPS = "30"                             # request rate; camera/CPU will cap it
 AUDIO_DUR_SEC = "0.10"                 # shorter audio chunks to keep latency low
-AUDIO_FRESH_WINDOW_S = 0.35            # only attach audio this recent
+AUDIO_FRESH_WINDOW_S = 0.12            # only attach audio this recent
 HTTP_TIMEOUT = (0.1, 0.15)             # (connect, read) seconds
 CHUNK_SIZE = 65536                     # bytes to read from camera pipe each iteration
 # ====================
