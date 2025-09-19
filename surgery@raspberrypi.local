@@ -19,7 +19,7 @@ import os
 import glob
 
 # ================== CONFIG ==================
-SERVER_IP = "10.189.65.41"   # <-- set to your Mac's reachable IP (you used this already)
+SERVER_IP = "10.189.65.41"   # <-- set to your Mac's reachable IP 
 SERVER_PORT = 8765
 
 FRAME_WIDTH  = 640
