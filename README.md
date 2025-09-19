@@ -13,9 +13,9 @@
 ---
 
 # Contributors
-- Co-Developer (Full-stack + Data): <a href="https://www.linkedin.com/in/tylerle-uf/" target="_blank">Tyler Le</a>
+- Co-Developer (Full-stack + Data): <a href="https://www.linkedin.com/in/tylerle-uf/" target="_blank">Tyler Le | Data Science @ University of Florida </a>
 
-- Co-Developer (Full-Stack + Hardware): <a href="https://www.linkedin.com/in/ryan-mago/" target=_blank> Ryan Mago </a>
+- Co-Developer (Full-Stack + Hardware): <a href="https://www.linkedin.com/in/ryan-mago/" target=_blank> Ryan Mago | Electrical Engineering @ Stanford University</a>
 
 # Description
 
