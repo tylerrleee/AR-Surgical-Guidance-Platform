@@ -12,6 +12,10 @@
 
 ---
 
+# Contributors
+- Co-Developer (Full-stack + Data): <a href="https://www.linkedin.com/in/tylerle-uf/" target="_blank">Tyler Le</a>
+
+- Co-Developer (Full-Stack + Hardware): <a href="https://www.linkedin.com/in/ryan-mago/" target=_blank> Ryan Mago </a>
 
 # Description
 
@@ -19,11 +23,6 @@ This is a real-time augmented reality (AR) system developed as a HackMIT project
 
 ## Demo Video 
 <a href="https://youtu.be/wmv5JAN-Vyw" target=_blank> DEMO @ HackMIT </a>
-
-# Contributors
-- Co-Developer (Full-stack + Data): <a href="https://www.linkedin.com/in/tylerle-uf/" target="_blank">Tyler Le</a>
-
-- Co-Developer (Full-Stack + Hardware): <a href="https://www.linkedin.com/in/ryan-mago/" target=_blank> Ryan Mago </a>
 
 ## Pain Points
 
