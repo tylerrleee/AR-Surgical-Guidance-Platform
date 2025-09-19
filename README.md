@@ -23,7 +23,7 @@ This is a real-time augmented reality (AR) system developed as a HackMIT project
 # Contributors
 - Co-Developer (Full-stack + Data): <a href="https://www.linkedin.com/in/tylerle-uf/" target="_blank">Tyler Le</a>
 
-- Co-Developer (Full-Stack + Hardware): <a href="https://www.linkedin.com/in/tylerle-uf/" target=_blank> Ryan Mago </a>
+- Co-Developer (Full-Stack + Hardware): <a href="https://www.linkedin.com/in/ryan-mago/" target=_blank> Ryan Mago </a>
 
 ## Pain Points
 
