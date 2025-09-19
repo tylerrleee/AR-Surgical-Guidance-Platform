@@ -84,9 +84,9 @@ The system is designed for **live video streaming**, **low latency networking**,
 
 ---
 
-## Instructions to Use
+# Instructions to Use
 
-### Prerequisites
+## Prerequisites
 
 - Raspberry Pi with camera connected (Auduicam or equivalent)  
 - XREAL AR glasses (or another compatible AR headset)  
@@ -94,7 +94,7 @@ The system is designed for **live video streaming**, **low latency networking**,
 - Microphone setup on both ends if two-way voice is needed  
 - Stable, low-latency network connection between Pi and remote client  
 
-### Setup
+## Setup
 
 1. Clone the repository:
 
