@@ -15,15 +15,41 @@
 
 # Description
 
-<a href="https://youtu.be/wmv5JAN-Vyw" target=_blank> DEMO VIDEO @ HackMIT </a>
-
 This is a real-time augmented reality (AR) system developed as a HackMIT project to enable remote surgical experts to assist on-site medics via live vision, voice, and spatial tracking. The system uses XREAL glasses (or similar AR headset), a Raspberry Pi to stream video, a local socket streaming camera feed (Auduicam or equivalent), microphone input, and remote UI & data server components. It aims to bring advanced environmental understanding and medical-grade precision to surgical guidance, combining live AR overlays, spatial tracking, and low latency communication.
 
+## Demo Video 
+<a href="https://youtu.be/wmv5JAN-Vyw" target=_blank> DEMO @ HackMIT </a>
+
 # Contributors
+- Co-Developer (Full-stack + Data): <a href="https://www.linkedin.com/in/tylerle-uf/" target="_blank">Tyler Le</a>
 
-   Co-Developer (Full-stack + Data): <a href="https://www.linkedin.com/in/tylerle-uf/" target="_blank">Tyler Le</a>
+- Co-Developer (Full-Stack + Hardware): <a href="https://www.linkedin.com/in/tylerle-uf/" target=_blank> Ryan Mago </a>
 
-   Co-Developer (Full-Stack + Hardware): <a href="https://www.linkedin.com/in/tylerle-uf/" target=_blank> Ryan Mago </a>
+## Pain Points
+
+   - In conflict regions like Ukraine, Gaza, and South Sudan, medics with limited surgical training are forced to perform high-stakes procedures.
+   
+   - Over 100,000 surgeries every day worldwide require guidance, yet the expertise needed often isn’t accessible.
+   
+   - Although 95% of surgeons in developed countries want to help, most cannot due to safety concerns and logistical barriers.
+
+## Who This Is For
+
+   - Medics in low-resource or conflict settings who face life-threatening surgeries without adequate training or support.
+   
+   - Experienced surgeons worldwide who want to contribute their expertise but cannot physically travel to these regions.
+   
+   - Patients in underserved or crisis environments whose outcomes depend on access to guided surgical care.
+
+## How It Helps
+
+   - Provides medics with augmented reality glasses that stream their field of vision to a remote surgeon.
+   
+   - Enables experienced doctors to annotate directly on the medic’s live view and speak instructions in real time.
+   
+   - Removes the barrier of physical presence, allowing surgeons to help safely from anywhere in the world.
+   
+   - Improves the reliability and safety of surgeries in low-resource conditions, connecting patients in need with an untapped pool of global surgical expertise.
 
 # Technical Implementation
 
@@ -116,34 +142,34 @@ The system is designed for **live video streaming**, **low latency networking**,
   python3 doctor_ui.py --server <server_ip> --port <port_ui>
   ```
 4. Connect the AR glasses at the on-site medic’s side for overlays.
-   The doctor uses the UI to send guidance, annotations, and voice.
+   - The doctor uses the UI to send guidance, annotations, and voice.
 
 5. For lightweight testing, use _simple versions (pi_simple.py, mac_simple.py).
 
 ## Configuration
-  Update IP addresses and ports in the scripts or via CLI args
+  - Update IP addresses and ports in the scripts or via CLI args
 
-  Ensure firewall/network rules allow communication
+  - Ensure firewall/network rules allow communication
 
-  Calibrate the AR overlay system for correct alignment with the physical environment
+  - Calibrate the AR overlay system for correct alignment with the physical environment
 
 ## Troubleshooting
-  Video not streaming: check camera device, drivers, and permissions
+  - Video not streaming: check camera device, drivers, and permissions
   
-  High latency: reduce resolution, check bandwidth, or switch to _simple modules
+  - High latency: reduce resolution, check bandwidth, or switch to _simple modules
   
-  Audio issues: confirm microphone input and audio routing
+  - Audio issues: confirm microphone input and audio routing
   
-  Overlay misaligned: recalibrate spatial tracking, check frame sync
+  - Overlay misaligned: recalibrate spatial tracking, check frame sync
 
-## Possible Future Enhancements
-  SLAM or markerless tracking for improved spatial alignment
+## Possible Future Improvements
+  - SLAM or markerless tracking for improved spatial alignment
   
-  Better video compression for lower latency
+  - Better video compression for lower latency
   
-  Richer AR overlays (annotations, measurement tools, instrument tracking)
+  - Richer AR overlays (annotations, measurement tools, instrument tracking)
   
-  End-to-end encryption for security
+  - End-to-end encryption for security
   
-  Integration with medical-grade hardware
+  - Integration with medical-grade hardware
 
