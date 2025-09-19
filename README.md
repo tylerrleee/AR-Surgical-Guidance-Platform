@@ -1,11 +1,21 @@
 # AR Surgical Guidance Platform
+<div>
+   <figure>
+      <img src="up.jpg" alt="up" width="350" height="450">
+   </figure>
+   <figure>
+      <img src="down.jpg" alt="down" width="350" height="450">
+   </figure>
+</div>
+
+*XREAL One AR Glasses, Raspberry Pi 5, Arducam, Microphone, Electrical Tape*
+
+---
+
 
 # Description
 
 This is a real-time augmented reality (AR) system developed as a HackMIT project to enable remote surgical experts to assist on-site medics via live vision, voice, and spatial tracking. The system uses XREAL glasses (or similar AR headset), a Raspberry Pi to stream video, a local socket streaming camera feed (Auduicam or equivalent), microphone input, and remote UI & data server components. It aims to bring advanced environmental understanding and medical-grade precision to surgical guidance, combining live AR overlays, spatial tracking, and low latency communication.
-
----
-
 
 # Contributors
 
